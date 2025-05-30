@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tic-Tac-Toe Game</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="game-container">
+        <div class="game-info">
+            <h1>Tic-Tac-Toe</h1>
+            <div class="scoreboard">
+                <div class="player-score" id="player1-score">
+                    <span class="player-name">Player 1 (X)</span>
+                    <span class="score">0</span>
+                </div>
+                <div class="round-info">
+                    <span>Round <span id="current-round">1</span>/5</span>
+                </div>
+                <div class="player-score" id="player2-score">
+                    <span class="player-name">Player 2 (O)</span>
+                    <span class="score">0</span>
+                </div>
+            </div>
+            <div class="status" id="game-status">Player 1's turn (X)</div>
+        </div>
+        
+        <div class="game-board">
+            <div class="cell" data-index="0"></div>
+            <div class="cell" data-index="1"></div>
+            <div class="cell" data-index="2"></div>
+            <div class="cell" data-index="3"></div>
+            <div class="cell" data-index="4"></div>
+            <div class="cell" data-index="5"></div>
+            <div class="cell" data-index="6"></div>
+            <div class="cell" data-index="7"></div>
+            <div class="cell" data-index="8"></div>
+        </div>
+        
+        <div class="game-controls">
+            <button id="restart-round">Restart Round</button>
+            <button id="new-game">New Game</button>
+            <button id="exit-game">Exit to Menu</button>
+        </div>
+        
+        <div class="room-info" id="room-info" style="display: none;">
+            <h3>Room: <span id="room-id"></span></h3>
+            <p>Share this link with a friend:</p>
+            <input type="text" id="room-link" readonly>
+            <button id="copy-link">Copy Link</button>
+        </div>
+    </div>
+    
+    <script src="js/play.js"></script>
+    <script src="js/ai.js"></script>
+</body>
+</html>
