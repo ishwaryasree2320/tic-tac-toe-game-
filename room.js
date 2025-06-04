@@ -60,7 +60,7 @@ document.addEventListener('DOMContentLoaded', function() {
             firebase.database().ref(`rooms/${roomId}`).once('value').then(snapshot => {
                 if (snapshot.exists()) {
                     clearInterval(checkRoomInterval);
-                    roomId = roomId; // Set the global roomId
+                    roomId = roomId;
                     setupGame();
                     showNotification(`Joined as Player O`);
                 }
@@ -156,6 +156,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function makeMove(data, index, mySymbol) {
+        // Validate move - cell must be empty
+        if (data.board[index] !== '') {
+            showNotification("Invalid move! Cell already taken.", true);
+            return;
+        }
+
         const newBoard = [...data.board];
         newBoard[index] = mySymbol;
         
