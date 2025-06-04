@@ -1,41 +1,59 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login | Neon Tic-Tac-Toe</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Login</title>
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyB2nEoXogVVvUqMqhO9TSJP5U_2PtJEC3k",
+      authDomain: "tic-tac-toe-a0983.firebaseapp.com",
+      projectId: "tic-tac-toe-a0983",
+      storageBucket: "tic-tac-toe-a0983.appspot.com",
+      messagingSenderId: "520288503873",
+      appId: "1:520288503873:web:c87075174e902896e41ec0",
+      measurementId: "G-L4FQE7H1QT"
+    };
+    firebase.initializeApp(firebaseConfig);
+  </script>
 </head>
 <body>
+  <div class="auth-container">
     <div class="auth-box">
-        <div class="auth-container">
-            <form class="auth-form" id="loginForm">
-                <div class="auth-header">
-                    <h1 class="auth-title glow">LOGIN</h1>
-                    <p class="auth-subtitle">Enter your credentials</p>
-                </div>
-                
-                <div class="input-group">
-                    <label for="loginUsername">Username</label>
-                    <input type="text" id="loginUsername" required>
-                </div>
-                
-                <div class="input-group">
-                    <label for="loginPassword">Password</label>
-                    <input type="password" id="loginPassword" required>
-                </div>
-                
-                <div class="links">
-                    <a href="#">Forgot Password?</a>
-                    <a href="signup.html">Create Account</a>
-                </div>
-                
-                <button type="submit" class="btn btn-primary">Login</button>
-            </form>
+      <form id="loginForm" class="auth-form">
+        <div class="auth-header">
+          <h2 class="auth-title">Login</h2>
+          <p class="auth-subtitle">Welcome back! Please login.</p>
         </div>
+
+        <div class="input-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" required />
+        </div>
+
+        <div class="input-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" required />
+        </div>
+
+        <button type="submit" class="btn btn-primary">Login</button>
+
+        <div class="links">
+          <a href="#" id="forgotPasswordLink">Forgot Password?</a>
+          <a href="signup.html">Signup</a>
+        </div>
+      </form>
     </div>
-    
-    <script src="auth.js"></script>
+  </div>
+
+  <script src="auth.js"></script>
+  <script src="game.js"></script>
+  <script src="index.html"></script>
 </body>
 </html>

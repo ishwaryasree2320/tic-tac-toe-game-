@@ -3,6 +3,7 @@ const gameState = {
     board: ['', '', '', '', '', '', '', '', ''],
     active: true,
     mode: null,
+    firebaseRoom: null,
     scores: { X: 0, O: 0 },
     round: 1,
     MAX_ROUNDS: 5
@@ -16,7 +17,7 @@ document.addEventListener('DOMContentLoaded', function () {
 function setupEventListeners() {
     document.getElementById('singlePlayerBtn').addEventListener('click', () => setGameMode('single'));
     document.getElementById('multiPlayerBtn').addEventListener('click', () => setGameMode('multi'));
-    document.getElementById('privateGameBtn').addEventListener('click', () => setGameMode('private'));
+    document.getElementById('privateGameBtn').addEventListener('click', () => setGameMode('firebase'));
 
     document.querySelectorAll('.cell').forEach(cell => {
         cell.addEventListener('click', handleCellClick);
@@ -34,6 +35,14 @@ function setGameMode(mode) {
 
     if (mode === 'single' && gameState.currentPlayer === 'O') {
         setTimeout(computerMove, 500);
+    }
+
+    if (mode === 'firebase') {
+        const roomId = new URLSearchParams(window.location.search).get('room');
+        if (roomId) {
+            gameState.firebaseRoom = roomId;
+            listenToFirebaseRoom(roomId);
+        }
     }
 }
 
@@ -61,11 +70,18 @@ function handleCellClick(e) {
     const cellIndex = parseInt(e.target.getAttribute('data-index'));
     if (gameState.board[cellIndex] !== '' || !gameState.active) return;
 
-    makeMove(cellIndex, gameState.currentPlayer);
-    checkGameStatus();
+    if (gameState.mode === 'firebase') {
+        const mySymbol = localStorage.getItem('symbol');
+        if (gameState.currentPlayer !== mySymbol) return;
 
-    if (gameState.mode === 'single' && gameState.active && gameState.currentPlayer === 'O') {
-        setTimeout(computerMove, 500);
+        sendMoveToFirebase(cellIndex, mySymbol);
+    } else {
+        makeMove(cellIndex, gameState.currentPlayer);
+        checkGameStatus();
+
+        if (gameState.mode === 'single' && gameState.active && gameState.currentPlayer === 'O') {
+            setTimeout(computerMove, 500);
+        }
     }
 }
 
@@ -198,4 +214,35 @@ function resetGame() {
 function startNewRound() {
     gameState.round++;
     initGame();
+}
+
+function sendMoveToFirebase(index, symbol) {
+    const ref = firebase.database().ref(`rooms/${gameState.firebaseRoom}`);
+    ref.once('value').then(snapshot => {
+        const data = snapshot.val();
+        const board = data.board;
+        const currentPlayer = data.currentPlayer;
+
+        if (board[index] !== '' || currentPlayer !== symbol) return;
+
+        board[index] = symbol;
+        const nextPlayer = symbol === 'X' ? 'O' : 'X';
+
+        ref.set({
+            board: board,
+            currentPlayer: nextPlayer,
+            createdAt: data.createdAt
+        });
+    });
+}
+
+function listenToFirebaseRoom(roomId) {
+    const ref = firebase.database().ref(`rooms/${roomId}`);
+    ref.on('value', snapshot => {
+        const data = snapshot.val();
+        if (!data) return;
+        gameState.board = data.board;
+        gameState.currentPlayer = data.currentPlayer;
+        updateGameUI();
+    });
 }

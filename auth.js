@@ -1,13 +1,16 @@
-if (!localStorage.getItem('ticTacToeUsers')) {
-    localStorage.setItem('ticTacToeUsers', JSON.stringify([]));
-}
+// Initialize Firebase Auth
+const auth = firebase.auth();
 
 // Check authentication on page load
 document.addEventListener('DOMContentLoaded', function() {
-    if (window.location.pathname.endsWith('index.html') || 
-        window.location.pathname === '/') {
+    // Check auth status for all pages except auth pages
+    if (!window.location.pathname.endsWith('login.html') && 
+        !window.location.pathname.endsWith('signup.html') &&
+        window.location.pathname !== '/') {
         checkAuth();
     }
+
+    // Theme toggle functionality
     const themeToggle = document.querySelector('.theme-toggle');
     if (themeToggle) {
         themeToggle.addEventListener('click', toggleTheme);
@@ -15,88 +18,117 @@ document.addEventListener('DOMContentLoaded', function() {
             document.body.classList.add('light-mode');
         }
     }
+
+    // Login form handler
     const loginForm = document.getElementById('loginForm');
     if (loginForm) {
-        loginForm.addEventListener('submit', handleLogin);
+        loginForm.addEventListener('submit', handleFirebaseLogin);
     }
+
+    // Signup form handler
     const signupForm = document.getElementById('signupForm');
     if (signupForm) {
-        signupForm.addEventListener('submit', handleSignup);
+        signupForm.addEventListener('submit', handleFirebaseSignup);
     }
+
+    // Logout button handler
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', handleLogout);
     }
+
+    // Forgot password link
+    const forgotPasswordLink = document.getElementById('forgotPasswordLink');
+    if (forgotPasswordLink) {
+        forgotPasswordLink.addEventListener('click', handleForgotPassword);
+    }
 });
 
-// Handle login form submission
-function handleLogin(e) {
+// Handle Firebase login
+function handleFirebaseLogin(e) {
     e.preventDefault();
     
-    const username = document.getElementById('loginUsername').value.trim();
-    const password = document.getElementById('loginPassword').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value.trim();
     
-    if (!username || !password) {
-        showError('Please enter both username and password');
+    if (!email || !password) {
+        showError('Please enter both email and password');
         return;
     }
 
-    const users = JSON.parse(localStorage.getItem('ticTacToeUsers'));
-    const user = users.find(u => u.username === username && u.password === password);
-    
-    if (user) {
-        localStorage.setItem('currentUser', username);
-        window.location.href = 'index.html';
-    } else {
-        showError('Invalid username or password');
-    }
+    auth.signInWithEmailAndPassword(email, password)
+        .then((userCredential) => {
+            // Set user in localStorage
+            localStorage.setItem('currentUser', userCredential.user.email);
+            window.location.href = 'index.html';
+        })
+        .catch((error) => {
+            showError(getFirebaseAuthError(error));
+        });
 }
 
-// Handle signup form submission
-function handleSignup(e) {
+// Handle Firebase signup
+function handleFirebaseSignup(e) {
     e.preventDefault();
     
-    const username = document.getElementById('signupUsername').value.trim();
-    const password = document.getElementById('signupPassword').value.trim();
-    const confirmPassword = document.getElementById('confirmPassword').value.trim();
+    const name = document.getElementById('name').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value.trim();
     
-    if (!username || !password || !confirmPassword) {
+    if (!name || !email || !password) {
         showError('Please fill all fields');
         return;
     }
 
-    if (password !== confirmPassword) {
-        showError('Passwords do not match');
-        return;
-    }
+    auth.createUserWithEmailAndPassword(email, password)
+        .then((userCredential) => {
+            // Set user in localStorage
+            localStorage.setItem('currentUser', userCredential.user.email);
+            
+            // Update user profile with display name
+            return userCredential.user.updateProfile({
+                displayName: name
+            });
+        })
+        .then(() => {
+            window.location.href = 'index.html';
+        })
+        .catch((error) => {
+            showError(getFirebaseAuthError(error));
+        });
+}
 
-    const users = JSON.parse(localStorage.getItem('ticTacToeUsers'));
+// Handle password reset
+function handleForgotPassword(e) {
+    e.preventDefault();
+    const email = prompt("Enter your registered email:");
     
-    if (users.some(u => u.username === username)) {
-        showError('Username already exists');
-        return;
+    if (email) {
+        auth.sendPasswordResetEmail(email)
+            .then(() => {
+                alert("Password reset email sent. Check your inbox.");
+            })
+            .catch(error => {
+                alert("Error: " + getFirebaseAuthError(error));
+            });
     }
-
-    // Add new user
-    users.push({ username, password });
-    localStorage.setItem('ticTacToeUsers', JSON.stringify(users));
-    localStorage.setItem('currentUser', username);
-    window.location.href = 'index.html';
 }
 
 // Check authentication status
 function checkAuth() {
-    const currentUser = localStorage.getItem('currentUser');
-    const allowedPages = ['login.html', 'signup.html'];
-    const currentPage = window.location.pathname.split('/').pop();
-    
-    if (!currentUser && !allowedPages.includes(currentPage)) {
+    const currentUser = localStorage.getItem('currentUser') || auth.currentUser?.email;
+    const isAuthPage = window.location.pathname.endsWith('login.html') || 
+                      window.location.pathname.endsWith('signup.html');
+
+    // If no user and not on auth page, redirect to login
+    if (!currentUser && !isAuthPage) {
         window.location.href = 'login.html';
         return;
     }
     
+    // If user is logged in
     if (currentUser) {
-        // Update UI if on game page
+        // Update UI elements if they exist
         if (document.getElementById('usernameDisplay')) {
             document.getElementById('usernameDisplay').textContent = currentUser;
         }
@@ -105,7 +137,7 @@ function checkAuth() {
         }
         
         // Redirect away from auth pages if already logged in
-        if (allowedPages.includes(currentPage)) {
+        if (isAuthPage) {
             window.location.href = 'index.html';
         }
     }
@@ -113,8 +145,14 @@ function checkAuth() {
 
 // Handle logout
 function handleLogout() {
-    localStorage.removeItem('currentUser');
-    window.location.href = 'login.html';
+    auth.signOut()
+        .then(() => {
+            localStorage.removeItem('currentUser');
+            window.location.href = 'login.html';
+        })
+        .catch((error) => {
+            showError('Logout failed: ' + error.message);
+        });
 }
 
 // Toggle theme
@@ -148,4 +186,28 @@ function showError(message) {
     setTimeout(() => {
         errorElement.remove();
     }, 3000);
+}
+
+// Convert Firebase auth errors to user-friendly messages
+function getFirebaseAuthError(error) {
+    switch (error.code) {
+        case 'auth/invalid-email':
+            return 'Invalid email address';
+        case 'auth/user-disabled':
+            return 'This account has been disabled';
+        case 'auth/user-not-found':
+            return 'No account found with this email';
+        case 'auth/wrong-password':
+            return 'Incorrect password';
+        case 'auth/email-already-in-use':
+            return 'Email already in use';
+        case 'auth/weak-password':
+            return 'Password should be at least 6 characters';
+        case 'auth/operation-not-allowed':
+            return 'This operation is not allowed';
+        case 'auth/too-many-requests':
+            return 'Too many requests. Try again later';
+        default:
+            return error.message;
+    }
 }
