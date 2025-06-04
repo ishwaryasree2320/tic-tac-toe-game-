@@ -7,17 +7,14 @@ document.addEventListener('DOMContentLoaded', function () {
     const joinRoomContainer = document.getElementById('joinRoomContainer');
     const joinRoomInput = document.getElementById('joinRoomInput');
     const joinNowBtn = document.getElementById('joinNowBtn');
-    const newRoundBtn = document.getElementById('newRoundBtn');
 
     let roomId = null;
     let playerSymbol = null;
-    const gameState = {
-        scores: { X: 0, O: 0 },
-        round: 1,
-        MAX_ROUNDS: 5
-    };
+    let roomRef = null;
+    let isGameActive = false;
+    const MAX_ROUNDS = 5;
 
-    // 🎮 Create a private game
+    // Create a private room
     privateBtn.addEventListener('click', () => {
         roomId = generateRoomId();
         const url = `${window.location.origin}${window.location.pathname}?room=${roomId}`;
@@ -28,45 +25,49 @@ document.addEventListener('DOMContentLoaded', function () {
         playerSymbol = 'X';
         localStorage.setItem("symbol", "X");
 
-        // Initialize game state in Firebase
+        // Initialize room data with scores
         firebase.database().ref(`rooms/${roomId}`).set({
-            board: ['', '', '', '', '', '', '', '', ''],
+            board: Array(9).fill(''),
             currentPlayer: 'X',
-            scores: { X: 0, O: 0 },
+            winner: null,
             round: 1,
-            MAX_ROUNDS: 5,
-            createdAt: Date.now()
+            scores: { X: 0, O: 0 },
+            gameOver: false,
+            createdAt: firebase.database.ServerValue.TIMESTAMP
+        }).then(() => {
+            listenToRoom(roomId);
+            document.querySelector('.game-modes').classList.add('hidden');
+            document.getElementById('gameArea').classList.remove('hidden');
+            showNotification(`You created room ${roomId} as Player X`);
         });
-
-        listenToRoom(roomId);
-        document.querySelector('.game-modes').classList.add('hidden');
-        document.getElementById('gameArea').classList.remove('hidden');
     });
 
-    // 🔓 Show join room input
+    // Join room button
     joinBtn.addEventListener('click', () => {
         joinRoomContainer.classList.remove('hidden');
         roomLinkContainer.classList.add('hidden');
     });
 
-    // 📋 Copy room link
+    // Copy room link
     copyLinkBtn.addEventListener('click', () => {
         roomLinkInput.select();
         document.execCommand('copy');
-        alert('Room link copied!');
+        showNotification('Room link copied!');
     });
 
-    // 🚪 Join room via pasted link
+    // Join existing room
     joinNowBtn.addEventListener('click', () => {
         const url = joinRoomInput.value.trim();
-        if (url.includes('?room=')) {
-            window.location.href = url;
+        const roomParam = url.match(/[?&]room=([^&]+)/);
+        
+        if (roomParam && roomParam[1]) {
+            window.location.href = `${window.location.pathname}?room=${roomParam[1]}`;
         } else {
-            alert('Please enter a valid room link');
+            showNotification('Invalid room link. Please check the URL.', true);
         }
     });
 
-    // 🔁 Auto-join if ?room= is in URL
+    // Auto-join room from URL
     const params = new URLSearchParams(window.location.search);
     if (params.has('room')) {
         roomId = params.get('room');
@@ -80,178 +81,204 @@ document.addEventListener('DOMContentLoaded', function () {
                     listenToRoom(roomId);
                     document.querySelector('.game-modes').classList.add('hidden');
                     document.getElementById('gameArea').classList.remove('hidden');
-                    document.getElementById('gameStatus').textContent = `Joined Room: ${roomId} as Player O`;
+                    showNotification(`Joined room ${roomId} as Player O`);
                 }
             });
         }, 1000);
     }
 
-    // 👂 Listen for room data and handle game logic
+    function generateRoomId() {
+        return Math.random().toString(36).substr(2, 8);
+    }
+
     function listenToRoom(roomId) {
-        const roomRef = firebase.database().ref(`rooms/${roomId}`);
-        const symbol = localStorage.getItem("symbol");
+        roomRef = firebase.database().ref(`rooms/${roomId}`);
+        const mySymbol = localStorage.getItem("symbol");
 
         roomRef.on('value', (snapshot) => {
             const data = snapshot.val();
-            if (!data) return;
+            if (!data) {
+                showNotification('Room no longer exists', true);
+                window.location.href = window.location.pathname;
+                return;
+            }
 
-            // Update local game state
-            gameState.board = data.board;
-            gameState.currentPlayer = data.currentPlayer;
-            gameState.scores = data.scores || { X: 0, O: 0 };
-            gameState.round = data.round || 1;
-            gameState.MAX_ROUNDS = data.MAX_ROUNDS || 5;
+            updateGame(data);
+            isGameActive = !data.winner && !data.gameOver;
 
-            // Update UI
-            updateFromFirebase(data);
+            // Handle game over state
+            if (data.winner) {
+                const statusMessage = data.winner === 'Tie' ? 
+                    `Round ${data.round} tied!` : 
+                    `Player ${data.winner} wins round ${data.round}!`;
+                showNotification(statusMessage);
+
+                // Prepare for next round after delay
+                if (data.round < MAX_ROUNDS) {
+                    setTimeout(() => {
+                        roomRef.update({
+                            board: Array(9).fill(''),
+                            currentPlayer: 'X',
+                            winner: null
+                        });
+                    }, 2000);
+                } else {
+                    // Game over - determine final winner
+                    setTimeout(() => {
+                        const finalWinner = determineFinalWinner(data.scores);
+                        const gameOverMessage = finalWinner === 'Tie' ? 
+                            'Game ended in a tie!' : 
+                            `Player ${finalWinner} wins the game!`;
+                        
+                        showNotification(gameOverMessage);
+                        roomRef.update({ gameOver: true });
+                    }, 2000);
+                }
+            }
         });
 
-        // Handle cell clicks
+        // Set up cell click handlers
         document.querySelectorAll('.cell').forEach((cell, i) => {
             cell.addEventListener('click', () => {
+                if (!isGameActive) return;
+                
                 roomRef.once('value').then(snapshot => {
                     const data = snapshot.val();
                     if (!data) return;
 
-                    const board = data.board;
-                    const currentPlayer = data.currentPlayer;
-
-                    // Validate turn
-                    if (board[i] !== '' || currentPlayer !== symbol) return;
-
-                    // Make move
-                    board[i] = symbol;
-                    const nextPlayer = symbol === 'X' ? 'O' : 'X';
-
-                    // Check game status
-                    const gameOver = checkWin(board, symbol) || checkTie(board);
-
-                    // Update Firebase
-                    roomRef.set({
-                        board: board,
-                        currentPlayer: nextPlayer,
-                        scores: data.scores,
-                        round: data.round,
-                        MAX_ROUNDS: data.MAX_ROUNDS,
-                        createdAt: data.createdAt
-                    });
-
-                    // Handle win/tie
-                    if (gameOver) {
-                        handleGameEnd(roomRef, data, symbol);
+                    // Validate move
+                    if (data.board[i] !== '' || 
+                        data.currentPlayer !== mySymbol || 
+                        data.winner || 
+                        data.gameOver) {
+                        return;
                     }
+
+                    // Make the move
+                    const newBoard = [...data.board];
+                    newBoard[i] = mySymbol;
+                    
+                    const winner = checkWinner(newBoard);
+                    const isTie = newBoard.every(cell => cell !== '');
+                    const nextPlayer = mySymbol === 'X' ? 'O' : 'X';
+                    
+                    // Update scores if there's a winner
+                    const newScores = {...data.scores};
+                    if (winner) {
+                        newScores[winner] = (newScores[winner] || 0) + 1;
+                    }
+
+                    const updates = {
+                        board: newBoard,
+                        currentPlayer: winner || isTie ? '-' : nextPlayer,
+                        scores: newScores
+                    };
+
+                    // Set winner if game ended
+                    if (winner || isTie) {
+                        updates.winner = winner || 'Tie';
+                        if (data.round === MAX_ROUNDS) {
+                            updates.gameOver = true;
+                        }
+                    }
+
+                    roomRef.update(updates);
                 });
             });
         });
-
-        // Handle new round button
-        newRoundBtn.addEventListener('click', () => {
-            startNewRound(roomRef);
-        });
     }
 
-    function updateFromFirebase(data) {
-        // Update board UI
+    function determineFinalWinner(scores) {
+        if (scores.X === scores.O) return 'Tie';
+        return scores.X > scores.O ? 'X' : 'O';
+    }
+
+    function updateGame(data) {
+        // Update board
         document.querySelectorAll('.cell').forEach((cell, i) => {
             cell.textContent = data.board[i];
             cell.className = 'cell ' + (data.board[i] || '').toLowerCase();
-            cell.classList.remove('winner');
+            
+            // Highlight winning cells
+            if (data.winner && data.winner !== 'Tie') {
+                const winningCombination = getWinningCombination(data.board, data.winner);
+                if (winningCombination.includes(i)) {
+                    cell.classList.add('winner');
+                }
+            }
         });
 
-        // Update scores and round
+        // Update game status
+        const statusElement = document.getElementById('gameStatus');
+        if (statusElement) {
+            if (data.gameOver) {
+                const finalWinner = determineFinalWinner(data.scores);
+                statusElement.textContent = finalWinner === 'Tie' ? 
+                    'Game ended in a tie!' : 
+                    `Player ${finalWinner} wins the game!`;
+            } else if (data.winner) {
+                statusElement.textContent = data.winner === 'Tie' ? 
+                    `Round ${data.round} tied!` : 
+                    `Player ${data.winner} wins round ${data.round}!`;
+            } else {
+                statusElement.textContent = `Player ${data.currentPlayer}'s turn (Round ${data.round})`;
+            }
+        }
+
+        // Update scores
         document.getElementById('playerXScore').textContent = data.scores?.X || 0;
         document.getElementById('playerOScore').textContent = data.scores?.O || 0;
-        document.getElementById('roundNumber').textContent = `${data.round || 1}/${data.MAX_ROUNDS || 5}`;
-        document.getElementById('gameStatus').textContent = `Player ${data.currentPlayer}'s turn`;
+        document.getElementById('roundNumber').textContent = `${data.round}/${MAX_ROUNDS}`;
     }
 
-    function checkWin(board, player) {
+    function checkWinner(board) {
         const winPatterns = [
-            [0, 1, 2], [3, 4, 5], [6, 7, 8],
-            [0, 3, 6], [1, 4, 7], [2, 5, 8],
-            [0, 4, 8], [2, 4, 6]
+            [0,1,2],[3,4,5],[6,7,8], // rows
+            [0,3,6],[1,4,7],[2,5,8], // columns
+            [0,4,8],[2,4,6]          // diagonals
         ];
-        return winPatterns.some(pattern => pattern.every(index => board[index] === player));
-    }
-
-    function checkTie(board) {
-        return board.every(cell => cell !== '');
-    }
-
-    function handleGameEnd(roomRef, roomData, symbol) {
-        const board = roomData.board;
-        const isTie = checkTie(board);
-        let winner = null;
-
-        if (!isTie) {
-            winner = symbol; // Current player just won
-            roomData.scores[winner] = (roomData.scores[winner] || 0) + 1;
-        }
-
-        // Update UI
-        if (isTie) {
-            document.getElementById('gameStatus').textContent = 'Game ended in a tie!';
-        } else {
-            document.getElementById('gameStatus').textContent = `Player ${winner} wins!`;
-            document.querySelectorAll(`.cell.${winner.toLowerCase()}`).forEach(cell => {
-                cell.classList.add('winner');
-            });
-        }
-
-        // Update scores in Firebase
-        roomRef.update({
-            scores: roomData.scores
-        });
-
-        // Show next round button if not final round
-        if (roomData.round < roomData.MAX_ROUNDS) {
-            document.getElementById('newRoundBtn').classList.remove('hidden');
-        } else {
-            setTimeout(() => {
-                showFinalResults(roomData.scores);
-            }, 1000);
-        }
-    }
-
-    function startNewRound(roomRef) {
-        roomRef.once('value').then(snapshot => {
-            const data = snapshot.val();
-            if (!data) return;
-
-            const nextRound = data.round + 1;
-            const startingPlayer = nextRound % 2 === 1 ? 'X' : 'O'; // Alternate starting player
-
-            roomRef.set({
-                board: ['', '', '', '', '', '', '', '', ''],
-                currentPlayer: startingPlayer,
-                scores: data.scores,
-                round: nextRound,
-                MAX_ROUNDS: data.MAX_ROUNDS,
-                createdAt: data.createdAt
-            });
-
-            document.getElementById('newRoundBtn').classList.add('hidden');
-        });
-    }
-
-    function showFinalResults(scores) {
-        let message;
-        if (scores.X > scores.O) {
-            message = `Game Over! Player X wins with ${scores.X} points!`;
-        } else if (scores.O > scores.X) {
-            message = `Game Over! Player O wins with ${scores.O} points!`;
-        } else {
-            message = `Game Over! It's a tie with ${scores.X} points each!`;
-        }
-        alert(message);
         
-        // Reset the game
-        document.getElementById('gameArea').classList.add('hidden');
-        document.querySelector('.game-modes').classList.remove('hidden');
+        for (let pattern of winPatterns) {
+            const [a,b,c] = pattern;
+            if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+                return board[a];
+            }
+        }
+        return null;
     }
 
-    // 🆔 Generate random 8-character room ID
-    function generateRoomId() {
-        return Math.random().toString(36).substr(2, 8);
+    function getWinningCombination(board, winner) {
+        const winPatterns = [
+            [0,1,2],[3,4,5],[6,7,8], // rows
+            [0,3,6],[1,4,7],[2,5,8], // columns
+            [0,4,8],[2,4,6]          // diagonals
+        ];
+        
+        for (let pattern of winPatterns) {
+            const [a,b,c] = pattern;
+            if (board[a] === winner && board[b] === winner && board[c] === winner) {
+                return pattern;
+            }
+        }
+        return [];
     }
+
+    function showNotification(message, isError = false) {
+        const notification = document.createElement('div');
+        notification.className = `notification ${isError ? 'error' : ''}`;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.classList.add('fade-out');
+            setTimeout(() => notification.remove(), 500);
+        }, 3000);
+    }
+
+    // Clean up when leaving the page
+    window.addEventListener('beforeunload', () => {
+        if (roomRef) {
+            roomRef.off();
+        }
+    });
 });
