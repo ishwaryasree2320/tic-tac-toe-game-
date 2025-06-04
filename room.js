@@ -52,24 +52,34 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    function joinRoomFromUrl(roomId) {
+    function joinRoomFromUrl(urlRoomId) {
+        showLoading(true);
+        roomId = urlRoomId;
         playerSymbol = 'O';
         localStorage.setItem("symbol", "O");
 
-        const checkRoomInterval = setInterval(() => {
-            firebase.database().ref(`rooms/${roomId}`).once('value').then(snapshot => {
-                if (snapshot.exists()) {
-                    clearInterval(checkRoomInterval);
-                    roomId = roomId;
-                    setupGame();
-                    showNotification(`Joined as Player O`);
-                }
-            });
-        }, 1000);
+        // First verify room exists
+        firebase.database().ref(`rooms/${roomId}`).once('value').then(snapshot => {
+            if (!snapshot.exists()) {
+                showNotification("Room doesn't exist or was closed", true);
+                returnToLobby();
+                return;
+            }
+
+            // Room exists, setup game
+            setupGame();
+            showNotification(`Joined room as Player O`);
+            listenToRoom();
+        }).catch(error => {
+            showNotification("Failed to join room: " + error.message, true);
+            console.error("Join error:", error);
+            returnToLobby();
+        }).finally(() => {
+            showLoading(false);
+        });
     }
 
     function setupGame() {
-        listenToRoom();
         document.querySelector('.game-modes').classList.add('hidden');
         document.getElementById('gameArea').classList.remove('hidden');
     }
@@ -81,7 +91,7 @@ document.addEventListener('DOMContentLoaded', function() {
         roomRef.on('value', (snapshot) => {
             const data = snapshot.val();
             if (!data) {
-                showNotification('Room closed', true);
+                showNotification('Room was closed by host', true);
                 returnToLobby();
                 return;
             }
@@ -156,9 +166,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function makeMove(data, index, mySymbol) {
-        // Validate move - cell must be empty
         if (data.board[index] !== '') {
-            showNotification("Invalid move! Cell already taken.", true);
+            showNotification("Cell already taken!", true);
             return;
         }
 
@@ -242,8 +251,15 @@ document.addEventListener('DOMContentLoaded', function() {
         if (roomParam && roomParam[1]) {
             window.location.href = `${window.location.pathname}?room=${roomParam[1]}`;
         } else {
-            showNotification('Invalid room link', true);
+            showNotification('Invalid room link. Please include "?room=ID"', true);
         }
+    }
+
+    function showLoading(show) {
+        const loader = document.getElementById('loadingIndicator');
+        if (loader) loader.classList.toggle('hidden', !show);
+        const status = document.getElementById('gameStatus');
+        if (status) status.classList.toggle('connecting', show);
     }
 
     function returnToLobby() {
