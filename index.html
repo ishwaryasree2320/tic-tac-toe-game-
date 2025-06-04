@@ -1,62 +1,115 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tic-Tac-Toe | Login</title>
-    <link rel="stylesheet" href="css/auth.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Neon Tic-Tac-Toe</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyB2nEoXogVVvUqMqhO9TSJP5U_2PtJEC3k",
+      authDomain: "tic-tac-toe-a0983.firebaseapp.com",
+      projectId: "tic-tac-toe-a0983",
+      storageBucket: "tic-tac-toe-a0983.firebasestorage.app",
+      messagingSenderId: "520288503873",
+      appId: "1:520288503873:web:c87075174e902896e41ec0",
+      measurementId: "G-L4FQE7H1QT"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+  </script>
 </head>
 <body>
-    <div class="container">
-        <div class="box">
-            <div class="form">
-                <h2>Login</h2>
-                <div class="inputBox">
-                    <input type="text" id="login-email" required>
-                    <span>Email</span>
-                    <i></i>
-                </div>
-                <div class="inputBox">
-                    <input type="password" id="login-password" required>
-                    <span>Password</span>
-                    <i></i>
-                </div>
-                <div class="links">
-                    <a href="#" id="forgot-password">Forgot Password</a>
-                    <a href="#" id="show-signup">Signup</a>
-                </div>
-                <button id="login-btn">Login</button>
-            </div>
-
-            <div class="form signup-form">
-                <h2>Sign Up</h2>
-                <div class="inputBox">
-                    <input type="text" id="signup-username" required>
-                    <span>Username</span>
-                    <i></i>
-                </div>
-                <div class="inputBox">
-                    <input type="text" id="signup-email" required>
-                    <span>Email</span>
-                    <i></i>
-                </div>
-                <div class="inputBox">
-                    <input type="password" id="signup-password" required>
-                    <span>Password</span>
-                    <i></i>
-                </div>
-                <div class="inputBox">
-                    <input type="password" id="signup-confirm-password" required>
-                    <span>Confirm Password</span>
-                    <i></i>
-                </div>
-                <div class="links">
-                    <a href="#" id="show-login">Login</a>
-                </div>
-                <button id="signup-btn">Sign Up</button>
-            </div>
-        </div>
+  <div class="theme-toggle">🌓</div>
+  <div class="game-container glass">
+    <header class="game-header">
+      <h1 class="game-title glow">TIC-TAC-TOE</h1>
+      <div class="user-info">
+        <div class="avatar" id="userAvatar"></div>
+        <button id="logoutBtn" class="btn btn-secondary">Logout</button>
+      </div>
+    </header>
+    <!-- Game Modes -->
+    <div class="game-modes">
+      <button id="singlePlayerBtn" class="mode-btn">
+        <span class="mode-icon">🤖</span>
+        <span>VS Computer</span>
+      </button>
+      <button id="multiPlayerBtn" class="mode-btn">
+        <span class="mode-icon">👥</span>
+        <span>Pass & Play</span>
+      </button>
+      <button id="privateGameBtn" class="mode-btn">
+        <span class="mode-icon">🔗</span>
+        <span>Private Game</span>
+      </button>
+      <button id="joinRoomBtn" class="mode-btn">
+        <span class="mode-icon">🔓</span>
+        <span>Join Room</span>
+      </button>
     </div>
-    <script src="js/auth.js"></script>
+    <!-- Room Sharing -->
+    <div id="roomLinkContainer" class="hidden glass" style="padding: 1rem; margin: 1rem 0;">
+      <p style="margin-bottom: 0.5rem;">Share this link:</p>
+      <div style="display: flex; gap: 0.5rem;">
+        <input type="text" id="roomLink" readonly style="flex: 1; padding: 0.5rem;">
+        <button id="copyLinkBtn" class="btn btn-primary">Copy</button>
+      </div>
+    </div>
+    <!-- Join Room Input -->
+    <div id="joinRoomContainer" class="hidden glass" style="padding: 1rem; margin: 1rem 0;">
+      <p>Enter Room ID to Join:</p>
+      <div style="display: flex; gap: 0.5rem;">
+        <input type="text" id="joinRoomInput" placeholder="Paste Room ID" style="flex: 1; padding: 0.5rem;">
+        <button id="joinNowBtn" class="btn btn-primary">Join</button>
+      </div>
+    </div>
+    <!-- Game Area -->
+    <div id="gameArea" class="hidden">
+      <div class="score-board glass">
+        <div class="score">
+          <div>Player X</div>
+          <div class="score-value x-score glow" id="playerXScore">0</div>
+        </div>
+        <div class="score">
+          <div>Rounds</div>
+          <div class="score-value" id="roundNumber">1/5</div>
+        </div>
+        <div class="score">
+          <div>Player O</div>
+          <div class="score-value o-score glow" id="playerOScore">0</div>
+        </div>
+      </div>
+
+      <div class="game-status glass" id="gameStatus" style="padding: 1rem; text-align: center;">
+        Player X's turn
+      </div>
+      <div class="game-board">
+        <div class="cell" data-index="0"></div>
+        <div class="cell" data-index="1"></div>
+        <div class="cell" data-index="2"></div>
+        <div class="cell" data-index="3"></div>
+        <div class="cell" data-index="4"></div>
+        <div class="cell" data-index="5"></div>
+        <div class="cell" data-index="6"></div>
+        <div class="cell" data-index="7"></div>
+        <div class="cell" data-index="8"></div>
+      </div>
+      <div class="game-controls">
+        <button id="resetGameBtn" class="btn btn-secondary">Reset Game</button>
+        <button id="newRoundBtn" class="btn btn-primary hidden">Next Round</button>
+      </div>
+    </div>
+  </div>
+  <!-- JS Files -->
+  <script src="auth.js"></script>
+  <script src="game.js"></script>
+  <script src="room.js"></script>
 </body>
 </html>
